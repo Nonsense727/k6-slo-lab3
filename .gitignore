@@ -1,0 +1,4 @@
+node_modules/
+*.log
+.DS_Store# Teacher's instruction document - not part of the deliverable
+*.docx
