@@ -1,194 +1,159 @@
-# Lab 3: SLO k6 threshold
+# Лаб 3: Чанарын сценарио → SLO → k6 threshold
 
-## Student info
+## Оюутны мэдээлэл
 
-- Name: Amarmend Tuvshinbayr
-- Student code: B222270036
+- Оюутны нэр: Амармэнд Түвшинбаяр
+- Оюутны код: B222270036
 - GitHub: Nonsense727
 
-## 1. Environment and tool versions
+## 1. Орчин ба хэрэгслийн хувилбарууд
 
-- OS: Ubuntu Linux (x86_64)
+- ҮС (OS): Ubuntu Linux (x86_64)
 - Node.js: v22.22.3 / npm 10.9.8 / Express 5.2.1
 - k6: v2.2.0 (commit/00a9a1b7f5, go1.26.5, linux/amd64)
 
-## 2. Ethics
+## 2. Ёс зүйн анхааруулга
 
-All load tests in this lab run exclusively against the local API at http://localhost:3000 (own machine). No load testing was performed against any third-party server.
+Энэхүү лабораторийн ажлын бүх ачааллын (load) тестүүд нь зөвхөн өөрийн машин дээрх http://localhost:3000 хаягт ажиллаж буй локал API рүү хийгдсэн болно. Гуравдагч этгээдийн ямар ч сервер рүү load тест хийгээгүй.
 
-## 3. Local API (server.js)
+## 3. Локал API (server.js)
 
-Three endpoints, each with a different behaviour:
+Гурван endpoint, тус бүр өөр өөр зан төлөвтэй:
 
-- POST /cart/add - fast, returns immediately (200)
-- GET /report - slow, sleeps 200-400 ms before responding (200)
-- POST /pay - unreliable, ~5% of requests return HTTP 500 "gateway timeout"
+- `POST /cart/add` — хурдан, агшин зуур 200 OK хариу буцаана.
+- `GET /report` — удаан, хариу өгөхийн өмнө санамсаргүйгээр 200–400 мс унтана (200 OK).
+- `POST /pay` — найдваргүй, нийт хүсэлтийн ~5% нь HTTP 500 "gateway timeout" алдаа буцаана.
 
-## 4. Scenarios (6-part format)
+## 4. Сценарионууд (6 хэсэгтэй формат)
 
-### Scenario 1 - Performance
+### Сценарио 1 — Performance (Гүйцэтгэл)
 
-- Summary: Under a steady load the /cart/add endpoint must answer fast enough that a shopper never perceives a lag when adding an item to the cart.
-- System state: 20 VUs running for 1 minute, each iteration posts to /cart/add then sleeps 1s.
-- Environment: localhost:3000, Node.js/Express, no other load on the machine.
-- External disturbance: none - only the k6 load itself.
-- Required response: HTTP 200 with {"ok":true,"items":1}.
-- Metric: p95 of http_req_duration tagged name=cart.
+| Хэсэг | Агуулга |
+|---|---|
+| **Тойм** | Тогтмол ачаалалтай үед `/cart/add` endpoint нь хэрэглэгч сагсандаа бараа нэмэхэд ямар ч саатал мэдрэхгүй байхаар хангалттай хурдан хариу өгөх ёстой. |
+| **Системийн төлөв** | 20 VU (Virtual Users) 1 минутын турш тогтмол ажиллана. Давталт бүрт `/cart/add` рүү POST хүсэлт илгээгээд 1 секунд унтана (sleep 1s). |
+| **Орчны төлөв** | `localhost:3000`, Node.js/Express, машин дээр өөр ямар нэгэн ачаалал байхгүй. |
+| **Гадаад өдөөлт** | Байхгүй — зөвхөн k6-ийн үүсгэсэн ачаалал. |
+| **Шаардлагатай хариу** | HTTP 200 ба `{"ok":true,"items":1}`. |
+| **Хэмжүүр** | `name=cart` tag-тай `http_req_duration`-ийн p95. |
 
-### Scenario 2 - Reliability
+### Сценарио 2 — Reliability (Найдвартай байдал)
 
-- Summary: The /pay endpoint fails (HTTP 500) on ~5% of requests by design; a real payment gateway must not be worse than that, so the failure rate must stay below a realistic bound.
-- System state: 20 VUs for 1 minute, each iteration posts to /pay then sleeps 1s.
-- Environment: localhost:3000, the payment handler randomly returns 500 on 5% of calls.
-- External disturbance: none.
-- Required response: HTTP 200 {"paid":true}; HTTP 500 is the injected fault.
-- Metric: error rate of http_req_failed tagged name=pay (POFOD).
+| Хэсэг | Агуулга |
+|---|---|
+| **Тойм** | `/pay` endpoint нь төлөвлөгөө ёсоор хүсэлтийн ~5%-д алдаа (HTTP 500) буцаадаг. Бодит төлбөрийн гарц үүнээс муу байж болохгүй тул алдааны хувь нь бодитой тогтоосон босгоос хэтрэхгүй байх ёстой. |
+| **Системийн төлөв** | 20 VU 1 минутын турш ажиллана. Давталт бүрт `/pay` рүү POST хүсэлт илгээгээд 1 секунд унтана. |
+| **Орчны төлөв** | `localhost:3000`, төлбөр боловсруулагч нь хүсэлтийн 5%-д санамсаргүй байдлаар 500 буцаана. |
+| **Гадаад өдөөлт** | Байхгүй (хэвийн хэрэглэгчийн төлбөрийн үйлдэл). |
+| **Шаардлагатай хариу** | HTTP 200 `{"paid":true}`; HTTP 500 нь зориудаар суулгасан гэмтэл (injected fault). |
+| **Хэмжүүр** | `name=pay` tag-тай `http_req_failed`-ийн алдааны хувь (POFOD / error rate). |
 
-### Scenario 3 - Availability
+### Сценарио 3 — Availability (Бэлэн байдал)
 
-- Summary: If the server crashes and is restarted, what fraction of requests still succeed, and how long is the downtime?
-- System state: 20 VUs for 2 minutes; the server is killed for 10 seconds at t+60s and then restarted.
-- Environment: localhost:3000, the server process is SIGTERM'd and relaunched with node server.js.
-- External disturbance: the 10-second outage is the injected chaos.
-- Required response: a successful HTTP response (200) counts as available; connection-refused and 500 count as unavailable.
-- Metric: availability = successful requests / total requests, plus the measured recovery time.
+| Хэсэг | Агуулга |
+|---|---|
+| **Тойм** | Сервер гэнэт унаж (crash) дахин ачаалагдах үед нийт хүсэлтийн хэдэн хувь нь амжилттай үлдэх, мөн зогсолт (downtime) хэр удаан үргэлжлэхийг хэмжинэ. |
+| **Системийн төлөв** | 20 VU 2 минутын турш ажиллана. 60 дахь секундэд (t+60s) серверийг 10 секундын турш унтрааж, дараа нь дахин асаана. |
+| **Орчны төлөв** | `localhost:3000`, серверийн процесс руу SIGTERM илгээж унтраагаад 10 секундийн дараа `node server.js`-ээр дахин асаана. |
+| **Гадаад өдөөлт** | Зориудаар оруулсан 10 секундийн системийн зогсолт (chaos outage). |
+| **Шаардлагатай хариу** | Амжилттай HTTP хариу (200) нь систем бэлэн байсныг илтгэнэ; "connection-refused" болон 500 алдаа нь бэлэн бус төлөвт тооцогдоно. |
+| **Хэмжүүр** | Бэлэн байдал = амжилттай хүсэлт / нийт хүсэлт, мөн бодитоор хэмжигдсэн сэргэх хугацаа (recovery time). |
 
-### Scenario 4 - Report latency (added threshold)
+### Сценарио 4 — Report latency (Нэмэлт сценарио / Тайлангийн саатал)
 
-- Summary: The /report endpoint must stay responsive even though it intentionally sleeps 200-400 ms.
-- System state: 20 VUs for 1 minute, each iteration also calls GET /report.
-- Environment: localhost:3000, handler sleeps 200-400 ms.
-- External disturbance: none.
-- Required response: HTTP 200 with {"rows":20000}.
-- Metric: p95 of http_req_duration tagged name=report.
+| Хэсэг | Агуулга |
+|---|---|
+| **Тойм** | `/report` endpoint нь зориудаар 200–400 мс саатдаг хэдий ч ачааллын үед хүлээн зөвшөөрөгдөх хэмжээнд хариу өгдөг хэвээр байх ёстой. |
+| **Системийн төлөв** | 20 VU 1 минутын турш ажиллана. Давталт бүрт мөн `GET /report` хүсэлт дуудна. |
+| **Орчны төлөв** | `localhost:3000`, боловсруулагч нь 200–400 мс саатна. |
+| **Гадаад өдөөлт** | Байхгүй. |
+| **Шаардлагатай хариу** | HTTP 200 ба `{"rows":20000}`. |
+| **Хэмжүүр** | `name=report` tag-тай `http_req_duration`-ийн p95. |
 
-## 5. SLO table
+## 5. SLO хүснэгт
 
-| Scenario | SLI (what is measured) | Threshold | Window / condition |
+| Сценарио | SLI (юуг хэмжих) | Босго (Threshold) | Цонх / нөхцөл |
 |---|---|---|---|
-| Performance | /cart/add latency | p95 < 200 ms | 20 VU steady, 1 min |
-| Reliability | /pay error rate | < 8% | 1 min, 20 VU |
-| Availability | share of successful requests | >= 90% | 2 min, 10 s outage inside |
-| Report latency | /report latency | p95 < 450 ms | 20 VU steady, 1 min |
+| Performance | `/cart/add` саатал (latency) | p95 < 200 мс | 20 VU тогтмол, 1 мин |
+| Reliability | `/pay` алдааны хувь (error rate) | < 8% | 1 мин, 20 VU |
+| Availability | Бүх хүсэлтийн амжилтын хувь | >= 90% | 2 мин, 10с зогсолт орсон |
+| Report latency | `/report` саатал (latency) | p95 < 450 мс | 20 VU тогтмол, 1 мин |
 
-### Why these thresholds
+### Яагаад эдгээр босгыг сонгосон бэ?
 
-- p95 < 200 ms for /cart/add: the measured baseline p95 was 1.5 ms. The handler returns immediately, so even with 20 VUs queueing the p95 stays around 1-2 ms. A 200 ms gate is generous enough to never fire on this machine while still catching a genuinely slow cart service.
-- p95 < 450 ms for /report: the handler sleeps 200-400 ms, so the measured p95 was 392 ms. The 450 ms gate leaves ~15% headroom above the measured p95 for request queueing under 20 VUs, and it is still far below the 1-second mark a user would notice.
-- < 8% for /pay: the server injects 5% errors, and the measured error rate was 5.5%. An 8% gate accepts the injected fault plus normal variance; anything above it means the payment path is worse than designed.
-- >= 90% for availability: measured success in the healthy run was 98.4%. A 90% gate tolerates a short outage while still requiring the service to be up the vast majority of the time.
+- `/cart/add` хувьд p95 < 200 мс: Хэмжсэн суурь (baseline) p95 нь 1.29 мс байсан. Сервер агшин зуур хариу өгдөг тул 20 VU дараалалд орсон ч p95 нь 1–2 мс орчим байдаг. 200 мс-ийн босго нь энэ машин дээр хэзээ ч зөрчигдөхгүй ч гэсэн сагсны үйлчилгээ бодитоор удааширсан үед найдвартай барьж авахад хангалттай бодитой босго юм.
+- `/report` хувьд p95 < 450 мс: Сервер 200–400 мс унтдаг тул бодитоор хэмжсэн p95 нь 391.9 мс байсан. 450 мс босго нь 20 VU ачаалалтай үеийн дараалалд зориулж ~15%-ийн нөөц (headroom) үлдээж байгаа ба энэ нь хэрэглэгчид анзаарагдах 1 секундийн хязгаараас хамаагүй хурдан юм.
+- `/pay` хувьд < 8%: Серверт 5% зориудын алдаа суулгасан бөгөөд хэмжсэн алдааны хувь 4.73% гарсан. 8%-ийн босго нь суурь алдаа дээр санамсаргүй хэлбэлзлийг нэмж тооцсон бодит босго бөгөөд үүнээс давбал төлбөрийн зам төлөвлөснөөс муудсаныг илтгэнэ.
+- Availability хувьд >= 90%: Хэвийн ажиллагааны үеийн амжилтын хувь 98.42% байсан. 90%-ийн босго нь богино хугацааны уналтыг тэсвэрлэх боловч нийт хугацааны ихэнх хувьд систем хэвийн ажиллах шаардлагыг хангана.
 
-### Error budget
+### Error budget (Алдааны төсөв)
 
-With an availability SLO of 90% over a 2-minute window, the allowed downtime is 10% of 120 s = 12 seconds. That is the "budget" of time the service may be unavailable inside the window. In the chaos run the server was actually down for 10 seconds, i.e. within the budget on a time basis. The measured availability was still only 85.81%, below the 90% gate. The reason is explained in section 8: the budget is counted by clock time, but the impact is counted per request, and during the outage far more requests land in the down window than the clock ratio suggests.
-## 6. k6 scripts
+2 минутын цонхонд availability SLO нь 90% байх үед зөвшөөрөгдөх зогсолтын хугацаа нь 120 секундийн 10% буюу 12 секунд байна. Энэ нь тухайн цонх дотор үйлчилгээ ажиллахгүй байж болох "цагийн төсөв" юм. Chaos туршилтын үеэр серверийг бодитоор 10 секунд зогсоосон нь цагийн хувьд төсөвтөө багтсан (8.3% < 10%). Гэвч хүсэлтээр хэмжсэн бодит availability нь 85.81% гарч, 90%-ийн босгоос доогуур орсон. Үүний шалтгааныг 8-р хэсэгт дэлгэрэнгүй тайлбарласан: төсвийг цагаар тооцдог боловч үр нөлөөг хүсэлтээр тооцдог ба серверийн уналтын үед цагийн харьцаанаас хамаагүй олон хүсэлт уналтын цонхонд өртдөг байна.
 
-- `slo-test.js` - PASS variant. 20 VUs, 1 minute. Thresholds per tag:
-  `http_req_duration{name:cart}` p(95)<200, `http_req_duration{name:report}` p(95)<450,
-  `http_req_failed{name:pay}` rate<0.08, `checks` rate>0.90.
-- `slo-test-fail.js` - FAIL variant. Same as above, but the report threshold is
-  tightened to p(95)<100 to force a deterministic failure (the handler sleeps
-  200-400 ms, so p95 is always >= 200 ms). The other thresholds keep their real
-  SLO values so only the report line crosses.
+## 6. k6 скриптүүд
 
-The thresholds in the scripts are identical to the thresholds in the SLO table
-above - the README numbers and the code numbers match exactly.
+- `slo-test.js` — PASS хувилбар. 20 VU, 1 минут. Tag тус бүрийн threshold:
+  `http_req_duration{name:cart}`: p(95)<200, `http_req_duration{name:report}`: p(95)<450,
+  `http_req_failed{name:pay}`: rate<0.08, `checks`: rate>0.90.
+- `slo-test-fail.js` — FAIL хувилбар. Дээрхтэй бүх зүйл ижил боловч `/report`-ийн босгыг p(95)<100 болгон чангаруулж зориудаар FAIL болгосон (сервер 200–400 мс унтдаг тул p95 нь үргэлж >= 200 мс байна). Бусад босгууд бодит SLO утгаа хадгалах тул зөвхөн тайлангийн хэмжүүр л босго давна.
 
-## 7. Results (full k6 text output)
+Скриптүүд дэх threshold-ууд нь дээрх SLO хүснэгтийн босгуудтай яг таг тохирч байгаа — README дээрх тоо болон кодын тоо бүрэн нийцнэ.
 
-Every number quoted below is taken verbatim from the files in `results/`.
+## 7. Үр дүн (k6-ийн бүтэн текст гаралт)
 
-### 7.1 PASS run - `results/pass.txt` (k6 exit code 0)
+Доор дурдсан бүх тоон үзүүлэлтүүдийг `results/` хавтас доторх файлуудаас яг тэр чигээр нь авсан болно.
 
-| Metric | Value | Gate | Result |
+### 7.1 PASS туршилт — `results/pass.txt` (k6 exit code 0)
+
+| Хэмжүүр (Metric) | Утга (Value) | Босго (Gate) | Үр дүн (Result) |
 |---|---|---|---|
 | http_req_duration{name:cart} p95 | 1.29 ms | < 200 ms | PASS |
 | http_req_duration{name:report} p95 | 391.9 ms | < 450 ms | PASS |
 | http_req_failed{name:pay} | 4.73% (44/930) | < 8% | PASS |
 | checks (availability) | 98.42% (2746/2790) | > 90% | PASS |
 
-Total requests: 2790 at 45.57 req/s. All four thresholds green, exit code 0.
+Нийт хүсэлт: 2790, хурд: 45.57 req/s. Дөрвөн threshold бүгд ногоон (PASS), exit code 0.
 
-### 7.2 Chaos run - `results/chaos.txt` (2 min, 10 s outage at t+60s)
+### 7.2 Chaos туршилт — `results/chaos.txt` (2 мин, t+60s үед 10с зогсолт)
 
-| Metric | Value | Gate | Result |
+| Хэмжүүр (Metric) | Утга (Value) | Босго (Gate) | Үр дүн (Result) |
 |---|---|---|---|
 | http_req_duration{name:cart} p95 | 1.33 ms | < 200 ms | PASS |
 | http_req_duration{name:report} p95 | 390.08 ms | < 450 ms | PASS |
 | http_req_failed{name:pay} | 17.13% (327/1908) | < 8% | FAIL |
 | checks (availability) | 85.81% (4912/5724) | > 90% | FAIL |
 
-During the outage k6 logged 729 "connection refused" warnings. The latency
-thresholds stayed green because requests that actually reached the server were
-served at normal speed - the failure mode was "no server", not "slow server".
-k6 exit code 0 (threshold failure does not change the exit code here; see 7.3).
+Уналтын үед k6 нийт 729 "connection refused" анхааруулга бүртгэсэн. Latency босгууд ногоон хэвээр үлдсэн шалтгаан нь серверт бодитоор хүрч чадсан хүсэлтүүд хэвийн хурдаар боловсруулагдсан явдал юм — гэмтлийн хэлбэр нь "удаан сервер" биш "сервер байхгүй" байсан. k6 exit code 0.
 
-### 7.3 FAIL run - `results/fail.txt` (k6 exit code 99)
+### 7.3 FAIL туршилт — `results/fail.txt` (k6 exit code 99)
 
-| Metric | Value | Gate | Result |
+| Хэмжүүр (Metric) | Утга (Value) | Босго (Gate) | Үр дүн (Result) |
 |---|---|---|---|
 | http_req_duration{name:cart} p95 | 1.25 ms | < 200 ms | PASS |
 | http_req_duration{name:report} p95 | 389.94 ms | < 100 ms | FAIL |
 | http_req_failed{name:pay} | 5.35% (50/933) | < 8% | PASS |
 | checks (availability) | 98.21% (2749/2799) | > 90% | PASS |
 
-k6 printed `thresholds on metrics 'http_req_duration{name:report}' have been
-crossed` and exited with code 99 (recorded at the bottom of `results/fail.txt`).
-This is the mechanism a CI pipeline uses to block a build: the report line is
-the only one that crossed, so the failure message points at the right metric.
+k6 нь `thresholds on metrics 'http_req_duration{name:report}' have been crossed` гэж хэвлээд 99 exit code-той дууссан (`results/fail.txt`-ийн төгсгөлд тэмдэглэгдсэн). Энэ нь CI pipeline build-ийг блоклоход ашигладаг механизм юм: зөвхөн тайлангийн мөр босго давсан тул алдааны мэдээлэл нь яг зөв хэмжүүрийг зааж өгдөг.
 
-### 7.4 Per-request availability measured during chaos
+### 7.4 Chaos үед хэмжигдсэн хүсэлт тус бүрийн availability
 
-- Successful requests: 4912
-- Total requests: 5724
+- Амжилттай хүсэлтүүд: 4912
+- Нийт хүсэлтүүд: 5724
 - Availability = 4912 / 5724 = 85.81%
-- Failed requests during outage: 729 connection-refused + the injected 5% 500s
-- Server down time (measured): 10 s of the 120 s window = 8.3% of clock time
+- Уналтын үед амжилтгүй болсон хүсэлт: 729 connection-refused + зориудын 5%-ийн 500 алдаанууд
+- Серверийн зогсолтын хугацаа (хэмжсэн): 120 секундийн цонхноос 10 секунд буюу цагийн 8.3%
 
-## 8. Chaos analysis
+## 8. Chaos шинжилгээ
 
-### Does the chaos run validate the availability SLO?
+### Chaos туршилт availability SLO-г батлав уу?
 
-Partially, and that partial result is the whole point. On a clock-time basis the
-10-second outage is 8.3% of the 2-minute window, which is inside the 12-second
-error budget, so a clock-based check would call the SLO met. Measured per
-request, availability is 85.81%, which is below the 90% gate, so the SLO is
-actually breached. The two numbers disagree because k6's `checks` metric counts
-per request, not per second. During the outage the 20 VUs keep firing at ~20
-requests per second, so roughly 200 requests land in the 10-second hole - far
-more than the 10/120 ratio would suggest. In other words, the error budget is a
-time budget but the SLI is a request-weighted measure; a short, sharp outage
-under a steady load consumes the budget much faster than the clock indicates.
+Хэсэгчлэн баталсан бөгөөд энэхүү зөрүүтэй үр дүн нь уг лабораторийн гол зорилго юм. Цагийн хувьд 10 секундийн зогсолт нь 2 минутын цонхны 8.3% болж байгаа тул 12 секундийн error budget дотор багтаж, цагаар тооцвол SLO хангагдсан мэт харагдана. Гэвч хүсэлтээр хэмжсэн бодит availability нь 85.81% гарч, 90%-ийн босгоос доогуур орсон тул SLO бодит байдал дээр зөрчигдсөн. Эдгээр хоёр тоо зөрж буй шалтгаан нь k6-ийн `checks` хэмжүүр нь секундийг бус хүсэлтийг тоолдогт оршино. Сервер унасан үед хүсэлт агшин зуур (connection refused) буцдаг ба `/report`-ын 200–400 мс хүлээлт алга болдог тул зогсолтын нэг секунд хэвийн секундээс олон хүсэлт "иддэг". Үүнээс гадна 20 VU нь секунд тутамд олон хүсэлт тасралтгүй илгээж байсан тул 10 секундийн нүхэнд цагийн 10/120 харьцаанаас хамаагүй олон хүсэлт унасан байна. Өөрөөр хэлбэл, error budget нь цагийн төсөв боловч SLI нь хүсэлтээр жигнэсэн хэмжүүр юм; тогтмол ачаалалтай үед богино, огцом уналт нь алдааны төсвийг цагийн харьцаанаас хамаагүй хурдан дуусгадаг.
 
-### Why did the reliability threshold also fail?
+### Reliability threshold яагаад мөн FAIL болсон бэ?
 
-When the server is down, every /pay request fails with connection-refused, so
-the pay error rate jumped from ~5% to 17.13%. One outage therefore breaches
-both the availability and the reliability SLO at the same time. The two SLIs can
-be separated by measuring them on different populations: the availability SLI
-should count every request (including connection-refused), while the
-reliability SLI should only count requests that actually reached a live server -
-i.e. filter out connection-refused and measure the 500 rate on the survivors.
-That way a crash no longer pollutes the reliability number.
+Сервер унасан үед `/pay` хүсэлт бүр connection-refused болж бүтэлгүйтсэн тул төлбөрийн алдааны хувь ~5%-иас 17.13% болж огцом өссөн. Иймээс нэг удаагийн уналт нь availability болон reliability SLO-г хоёуланг нь зэрэг зөрчиж байна. Энэ хоёр SLI-г дараах байдлаар тусгаарлаж болно: availability SLI нь нийт хүсэлтийг (connection-refused-ийг оруулаад) тоолох ёстой бол reliability SLI нь зөвхөн амьд серверт бодитоор хүрсэн хүсэлтүүдийг тоолох ёстой — өөрөөр хэлбэл connection-refused хүсэлтүүдийг шүүж аваад, зөвхөн серверт хүрч чадсан хүсэлтүүд дээрх 500 алдааны хувийг хэмжих юм. Ингэснээр серверийн уналт нь найдвартай байдлын тоон үзүүлэлтийг бохирдуулахгүй.
 
-## 9. Conclusion
+## 9. Дүгнэлт
 
-The hardest part of the scenario -> SLO -> threshold chain was choosing thresholds
-that are both realistic and meaningful. A p95 < 200 ms gate on /cart/add is
-technically trivial on localhost (measured 1.29 ms) and would never fire, yet it is
-still worth writing down because it defines what "fast" means for that endpoint -
-the value only becomes meaningful when the service is deployed somewhere with
-real network latency. The chaos run confirmed the availability SLO is sensitive
-to request-weighted measurement: a 10-second outage under 20 VUs drove
-availability to 85.81%, below the 90% gate, even though the outage itself was
-inside the 12-second clock-time error budget. The same outage also pushed the pay
-error rate to 17.13%, proving that a single crash breaches availability and
-reliability together. The two SLIs can be separated: the availability SLI should
-count every request, including connection-refused, while the reliability SLI should
-measure the 500 rate only on requests that actually reached a live server, so a crash
-no longer pollutes the reliability number. The intentional FAIL run (report p95 <
-100 ms) returned exit code 99 and named the crossed metric, which is exactly how a CI
-quality gate blocks an unhealthy build. Finally, a k6 threshold is only as good as
-the baseline it is derived from: every number in this report was measured on this
-machine, and the chaos run is what proved the SLO is meaningful rather than
-arbitrary.
+Сценарио → SLO → threshold шилжилтэд хамгийн хэцүү хэсэг нь бодит системд нийцсэн бөгөөд утга учиртай босго утгуудыг сонгох явдал байлаа. Жишээлбэл, `/cart/add` дээр p95 < 200 мс босго тавих нь локал машин дээр техникийн хувьд маш амархан (хэмжсэн утга 1.29 мс) бөгөөд хэзээ ч зөрчигдөхгүй мэт боловч энэ нь тухайн endpoint-ийн хувьд "хурдан" гэж юуг ойлгохыг албан ёсоор тодорхойлж өгдөг. Уг тоо нь системийг сүлжээний бодит сааталтай орчинд байршуулах үед жинхэнэ утга учиртай болно. Chaos туршилт нь availability SLO нь хүсэлтээр жигнэсэн хэмжилтэд маш мэдрэг болохыг тодорхой баталлаа. 20 VU ачаалалтай үед 10 секундийн зогсолт хийхэд availability 85.81% болж бууран 90%-ийн босгыг давж чадаагүй нь уг зогсолт 12 секундийн цагийн төсөвтөө багтсан хэдий ч хүсэлтээр тооцвол төсвийг хэтрүүлснийг харуулав. Мөн энэхүү уналт нь `/pay` алдааны хувийг 17.13% болгон өсгөсөн нь нэг удаагийн серверийн зогсолт availability ба reliability-г зэрэг эвддэгийг нотоллоо. Эдгээр SLI-г тусгаарлахын тулд availability нь нийт хүсэлтийг тоолж, харин reliability нь зөвхөн амьд серверт хүрсэн хүсэлтүүдийн алдааг хэмжих зарчмаар салгаж болно. Зориуд FAIL болгосон туршилтаар (`/report` p95 < 100 мс) k6 нь 99 exit code буцааж, зөрчигдсөн хэмжүүрийг нэрлэсэн нь CI pipeline чанарын шалгуураар гэмтэлтэй бүтцийг хэрхэн зогсоодгийг харууллаа. Эцэст нь дүгнэхэд, k6 threshold нь бодит суурь хэмжилт дээр тулгуурласан үед л үнэ цэнтэй байх бөгөөд chaos туршилт нь SLO-г дур зоргын тоо биш, бодитой хэмжүүр болгон баталгаажуулсан гол шалгалт боллоо.
